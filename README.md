@@ -103,8 +103,8 @@ and is missing on the customer's server.
 See **[INSTALL.md](INSTALL.md)** for the full walk-through. The short version:
 
 ```bash
-git clone https://github.com/<you>/odoo-devkit.git
-cd odoo-devkit
+git clone https://github.com/muhhedahmd/odoo-devKit.git
+cd odoo-devKit
 python install.py --global --odoo /path/to/odoo
 ```
 

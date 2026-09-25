@@ -43,8 +43,8 @@ If you point at the wrong level the installer says so rather than guessing.
 ### The usual way — once per machine
 
 ```bash
-git clone https://github.com/<you>/odoo-devkit.git
-cd odoo-devkit
+git clone https://github.com/muhhedahmd/odoo-devKit.git
+cd odoo-devKit
 python install.py --global --odoo /path/to/odoo
 ```
 
@@ -161,8 +161,8 @@ If (4) says nothing, the index has not loaded — see below.
 The repository carries no machine paths, so:
 
 ```bash
-git clone https://github.com/<you>/odoo-devkit.git
-cd odoo-devkit
+git clone https://github.com/muhhedahmd/odoo-devKit.git
+cd odoo-devKit
 python install.py --global --odoo /path/to/odoo
 ```
 
