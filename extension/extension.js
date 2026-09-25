@@ -261,6 +261,73 @@ function fieldItems(model) {
 
 
 
+
+// ── the search view ────────────────────────────────────────────────────
+
+// Odoo cannot group by these, so offering them in a group_by is offering
+// something that will not work.
+const NOT_GROUPABLE = new Set([
+  "Text", "Html", "Binary", "Image", "One2many", "Many2many", "Json",
+]);
+
+function groupableItems(model) {
+  const fields = fieldsOf(model);
+  const items = [];
+  for (const [name, [type, label, comodel]] of Object.entries(fields)) {
+    if (NOT_GROUPABLE.has(type)) continue;
+    const item = new vscode.CompletionItem(
+      name,
+      vscode.CompletionItemKind.Field
+    );
+    item.detail = `${type}${comodel ? " → " + comodel : ""}${label ? "  ·  " + label : ""}`;
+    // A date grouped without a granularity groups by day, which is almost
+    // never what was meant on a list of a year's records.
+    if (type === "Date" || type === "Datetime") {
+      item.documentation = new vscode.MarkdownString(
+        "Add a granularity — `" + name + ":month` — or it groups by day."
+      );
+    }
+    item.sortText = `${label ? 0 : 1}${name}`;
+    items.push(item);
+  }
+  return items;
+}
+
+// The filters declared in this file, for search_default_. Odoo matches these
+// by name, and a name that matches nothing ticks nothing and says nothing.
+function filterItems(text) {
+  const items = [];
+  const seen = new Set();
+  const FILTER = /<(filter|separator|searchpanel)\b[^>]*\bname\s*=\s*"([^"]+)"[^>]*>/g;
+  let match;
+  while ((match = FILTER.exec(text))) {
+    if (match[1] !== "filter" || seen.has(match[2])) continue;
+    seen.add(match[2]);
+    const label = /\bstring\s*=\s*"([^"]*)"/.exec(match[0]);
+    const grouping = /group_by/.test(match[0]);
+    const item = new vscode.CompletionItem(
+      "search_default_" + match[2],
+      vscode.CompletionItemKind.Enum
+    );
+    item.detail = (label ? label[1] : "") + (grouping ? "  ·  group by" : "  ·  filter");
+    item.filterText = "search_default_" + match[2];
+    item.sortText = "0" + match[2];
+    items.push(item);
+  }
+  return items;
+}
+
+// Inside a context, what is being typed decides what is wanted:
+// `{'group_by': '…'}` wants a field, everything else wants a key.
+function contextWants(before) {
+  const quote = Math.max(before.lastIndexOf('"'), before.lastIndexOf("'"));
+  const tail = before.slice(Math.max(0, quote - 40));
+  if (/group_by\W+[^\W]*$/.test(tail) || /group_by["']?\s*:\s*["'][^"']*$/.test(tail)) {
+    return "groupby";
+  }
+  return "key";
+}
+
 // ── ref=, domain= and context= ─────────────────────────────────────────
 //
 // `ref` takes an external id, and which kind depends entirely on the field
@@ -972,20 +1039,31 @@ function activate(context) {
           if (kind) return externalIdItems(document, kind);
         }
 
-        // domain= and context=, completed with the model's own fields.
+        // domain=, filter_domain=, default_group_by= and context= — each
+        // wants something different out of the same model.
+        const SEARCHY = new Set([
+          "domain", "filter_domain", "context", "default_group_by",
+        ]);
         if (
-          (context_.attr === "domain" || context_.attr === "context") &&
+          SEARCHY.has(context_.attr) &&
           modelFields.size &&
           !isOwlTemplate(document)
         ) {
           const model = recordModel(document.getText(), before.length);
           if (model && modelFields.has(model)) {
-            return domainItems(
-              model,
-              context_.attr === "domain"
-                ? [""]
-                : ["default_", "search_default_"]
-            );
+            if (context_.attr === "default_group_by") {
+              return groupableItems(model);
+            }
+            if (context_.attr === "context") {
+              if (contextWants(before) === "groupby") {
+                return groupableItems(model);
+              }
+              // The keys: this view's own filters first, then the prefixes.
+              return filterItems(document.getText()).concat(
+                domainItems(model, ["default_", "search_default_"])
+              );
+            }
+            return domainItems(model, [""]);
           }
         }
 
