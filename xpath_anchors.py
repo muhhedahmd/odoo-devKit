@@ -13,12 +13,12 @@ This reads the parent view and prints every anchor it really has, ready to
 paste. It searches this repo and the local Odoo source, so it answers for core
 views too.
 
-    python tools/xpath_anchors.py base.view_partner_form
-    python tools/xpath_anchors.py village_base.view_unit_form --tree
+    python odoo-devkit/xpath_anchors.py base.view_partner_form
+    python odoo-devkit/xpath_anchors.py my_module.view_thing_form --tree
 
 Given a file instead of an id, it answers for every inherit_id in that file:
 
-    python tools/xpath_anchors.py village_charges/views/village_views.xml
+    python odoo-devkit/xpath_anchors.py my_module/views/thing_views.xml
 
 It reads the parent's OWN arch. Other modules' additions to the same view are
 listed at the end, because a node added by another module is a legal anchor
@@ -57,10 +57,10 @@ def odoo_paths():
 
 # The local Odoo source has an `ent_addons` directory inside it holding the
 # Enterprise modules — helpdesk, industry_fsm, documents — and a second copy
-# of base. Skipped by default, and for more than tidiness: the village line is
-# Community only (RULE #10c), and a tool that cheerfully offers an anchor from
-# an Enterprise view is a tool that helps you write a module which installs
-# here and fails on the customer's server. --enterprise includes them, marked.
+# of base. Skipped by default, and for more than tidiness: a tool that
+# cheerfully offers an anchor from an Enterprise view helps you write a
+# module that installs on your machine and is missing on a Community
+# server. --enterprise includes them, marked.
 ENTERPRISE_DIRS = {"ent_addons", "enterprise", "odoo-enterprise"}
 
 
@@ -105,7 +105,7 @@ def class_bodies(text):
 
 
 def index_models(roots, ids, skip, model_fields=None, model_parents=None):
-    """The ir.model ids Odoo generates: village.unit -> model_village_unit.
+    """The ir.model ids Odoo generates: sale.order -> model_sale_order.
 
     They exist only in the database, so there is nothing to copy them from
     and they are retyped from memory into every ACL line.
@@ -417,8 +417,8 @@ def report(xmlid, views, show_tree):
           if view["path"].startswith(REPO) else "  " + view["path"])
 
     if view.get("enterprise"):
-        print("  *** ENTERPRISE. Nothing in the village line may inherit this:")
-        print("      it installs here and is missing on the customer's server.")
+        print("  *** ENTERPRISE. Inheriting this from a Community module")
+        print("      works here and is missing on the customer's server.")
 
     if view["inherit"]:
         print("  NOTE: this view is itself an extension of %s — anchor on the"
@@ -459,8 +459,8 @@ def main():
     parser.add_argument("--rebuild", action="store_true",
                         help="throw the cache away and index again")
     parser.add_argument("--enterprise", action="store_true",
-                        help="also search the Enterprise source (village is "
-                             "Community only, so this is normally wrong)")
+                        help="also search the Enterprise source (wrong for a "
+                             "Community-only project)")
     args = parser.parse_args()
 
     roots = [REPO] + odoo_paths()

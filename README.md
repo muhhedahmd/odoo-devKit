@@ -1,155 +1,156 @@
 # odoo-devkit
 
-## One command, anywhere
+Completions and checks for Odoo development, read out of the Odoo source on
+your own machine.
 
-Set it up on the machine once:
+Nothing here is a hard-coded list. Every name it offers — every field, view,
+widget, menu, group, model and OWL directive — is extracted from the checkout
+you point it at, so it is right about the version you actually have rather
+than about a version someone remembered when they wrote a plugin.
 
+Built and verified against **Odoo 19**. The indexes work from whatever source
+you give them; the removed-API check is 19-specific.
+
+---
+
+## Why
+
+Most of what breaks an Odoo module is a string that nothing validates until
+install:
+
+```xml
+<field name="secotr_id"/>                     <!-- fails on a build -->
+<xpath expr="//notebook" position="inside">   <!-- the parent has none -->
+<menuitem parent="account.menu_x"/>           <!-- a module you don't depend on -->
+widget="many2many_tag"                         <!-- renders plain, says nothing -->
 ```
-python odoo-devkit/install.py --global
+
+The editor cannot know. Odoo's own language server does not read `inherit_id`
+at all. So the answers are indexed from the source and offered where the
+string is typed.
+
+---
+
+## What it completes
+
+| Where | From |
+|---|---|
+| `<field name="…">` | the fields of the model the record is for — **1,302 models** |
+| `<xpath expr="…">` | the nodes the inherited view really has — **5,998 views** |
+| `position="…"` | the six, each with what it does |
+| `widget="…"` | **349 widgets**, with the module and the field types each supports |
+| `<widget name="…">` | the view widgets — a different registry, same spelling |
+| `parent=` · `action=` | **944 menus** · **1,291 actions** |
+| `groups=` | **143 security groups** |
+| `ref="…"` | narrowed by the field it sits on: `model_id` wants a model, `inherit_id` a view |
+| `domain=` · `context=` | the model's own fields, with `default_` and `search_default_` |
+| `ir.model.access.csv` | **1,415 model ids** and the groups — the column read from the header |
+| `t-*` in OWL templates | **258 directives**, from the OWL build your Odoo ships |
+| `t-call=` · `static template =` | **2,463 templates** that exist |
+| `<record …>` | its attributes, from a schema in `assets/odoo.xsd` |
+| Python, XML, JS | **73 snippets** |
+
+Anything from a module you have not declared in `depends` is sorted last and
+marked, with the reason: that is a failure you meet on someone else's server,
+not on yours.
+
+## What it warns about
+
+**A view naming a field the model has not got.** Reported against the model
+the node is really in — a field inside a one2many's subview is checked against
+the comodel.
+
+**OWL's own compile-time rules**: `t-foreach` without `t-key`, `t-elif` with
+nothing to follow, `t-component` on a node that is not a `<t>`, `t-model` on a
+tag that cannot be modelled, `t-on` with no event name, `t-raw` (removed in
+OWL 2), and any `t-` attribute that is not a directive — the browser keeps
+those as plain attributes and ignores them in silence.
+
+**What Odoo 19 removed**, with the emphasis on what fails quietly:
+`_sql_constraints` is accepted and then ignored, so the table simply has no
+constraint and nothing says so.
+
+### Measured against code that is correct by definition
+
+| | |
+|---|---|
+| 566 view files across ten core addons | **0 findings** |
+| 462 OWL template files | **0 findings** |
+| Two deliberate typos in a test view | both caught |
+
+Getting there found six real defects in the checker, not six thresholds to
+tune. The notes are in the commit history.
+
+## What it does not do
+
+`from odoo.addons.account.models…` will not resolve, in any editor. Odoo
+merges the addon directories into one namespace at runtime and no static
+analyser reproduces that. Open the core file instead — the installer puts the
+source on the search path.
+
+Inherited views are not field-checked. The model a node lands in comes from
+the xpath expression, not from the XML around it, and guessing produced four
+false positives in core's own purchase views.
+
+Enterprise is skipped wherever it is found. A tool that offers an anchor or a
+widget from an Enterprise view helps you write a module that installs locally
+and is missing on the customer's server.
+
+---
+
+## Install
+
+See **[INSTALL.md](INSTALL.md)** for the full walk-through. The short version:
+
+```bash
+git clone https://github.com/<you>/odoo-devkit.git
+cd odoo-devkit
+python install.py --global --odoo /path/to/odoo
 ```
 
-That copies the kit to `~/.odoo-devkit`, puts an `odoo-devkit` command on
-PATH, and remembers where your Odoo source is. From then on, in any project
-folder:
+Then, in any Odoo project folder:
 
-```
+```bash
 odoo-devkit
 ```
 
-It copies itself in and sets the project up. Nothing to download, nothing to
-pass — the Odoo path is the one thing worth remembering across projects and it
-is the one thing it remembers.
+Reload the editor window.
 
-## Or by hand
+## Requirements
 
-Drop this folder at the root of a project and run:
-
-```
-python odoo-devkit/install.py
-```
-
-It finds the Odoo source itself if it is anywhere near, and tells you what to
-pass if it is not:
-
-```
-python odoo-devkit/install.py --odoo C:/path/to/odoo
-```
-
-Nothing in this folder contains a path to any particular machine. The
-installer writes them, which is why the same folder works in the next project
-and on somebody else's computer.
-
-## On another machine
-
-The folder is portable; the installer is what makes it fit. On a computer that
-has never seen it:
-
-```
-python odoo-devkit/install.py --global --odoo C:/path/to/odoo
-```
-
-`--odoo` is needed the first time on each machine — the remembered path lives
-in `~/.odoo-devkit/config.json`, which is per user and not carried in the
-folder.
-
-What it handles for you:
-
-* **lxml**, the kit's only dependency. Missing, the view index never builds
-  and the extension just goes quiet; the installer now installs it, and says
-  so plainly if it cannot.
-* **`~/.local/bin`**, which often does not exist on a fresh account. It is
-  created, and if it is not on PATH you are told the exact `setx` line rather
-  than left with a command the shell cannot find.
-* **A failed index** is reported with the error, instead of being swallowed
-  behind "Done".
-
-Node and npm are optional: without them the OWL types are skipped and
-everything else still works. The `jstypes/node_modules` folder copies across
-with the kit, so a machine with no network still gets them.
-
-## What it sets up
-
-**The completions that were missing.** The first thing the installer does is
-turn off `editor.wordBasedSuggestions`. By default the editor pads every
-completion list with words scraped out of whatever files are open — `about`,
-`across`, `already` — and they arrive with the same icon as the real ones.
-That single setting is the difference between a useless list and a short one.
-
-**Odoo's language server**, pointed at your source. `odools.toml` carries both
-paths it needs: `odoo_path` gives it `odoo/addons` — base and web — and the
-separate top-level `addons` directory holds everything a module really depends
-on. With only the first, every manifest reports *depends on mail which is not
-found* and every `self.env["account.move"]` is an unknown model.
-
-**`<xpath expr="">`, completed from the view you are inheriting.** Nothing
-else does this: Odoo's own language server never reads `inherit_id`. The
-extension finds the record's `inherit_id`, looks the parent up in an index of
-every view in the source, and offers the expressions that would actually
-resolve — name matches first, bare tags last and labelled, because a bare tag
-is unique only until somebody adds a second one.
-
-**`widget="…"`**, from the widgets Odoo registers, with the module each one
-comes from. A widget belonging to a module you do not depend on is marked: it
-renders on your machine and not on the customer's, and a widget that silently
-falls back to a plain field reads as a styling bug.
-
-**OWL templates, checked.** Every directive name comes out of the OWL bundle
-your Odoo ships, and every rule is one of OWL's own compile-time errors:
-`t-foreach` without `t-key`, `t-elif` with nothing to follow, `t-component` on
-something that is not a `<t>`, `t-model` on a tag that cannot be modelled,
-`t-on` with no event name. Plus a warning on any `t-` attribute that is not a
-directive at all — the browser keeps those as plain attributes and ignores
-them in silence.
-
-Verified against 462 of Odoo's own template files: zero findings.
-
-**TypeScript-grade help for the frontend**, without writing TypeScript. Odoo
-ships `.d.ts` files for OWL, the registries and the field widgets, and OWL
-publishes its own types. None of it does anything until something maps the
-import names onto those files, because `@web/core/registry` is an Odoo module
-id and not a path. `jsconfig.json` is that mapping.
-
-**An XML schema for data files**, so `<record>` offers its attributes and a
-missing `model=` is caught here rather than at install. Deliberately
-permissive: unknown attributes pass, and the inside of a view's `arch` is not
-checked at all — that language is too large and too version-dependent to
-describe, and a wrong guess would paint every file red.
+| | |
+|---|---|
+| Python 3.8+ | you have it if you run Odoo |
+| `lxml` | installed for you if missing |
+| An Odoo source checkout | the folder holding both `odoo/release.py` and `addons/` |
+| VS Code or a fork | Cursor, Antigravity, Windsurf, VSCodium — all detected |
+| Node and npm | optional: only the OWL type definitions need them |
 
 ## Using it
 
 | | |
 |---|---|
+| `Ctrl+Space` | in any of the places in the table above |
 | `Ctrl+Shift+B` | the xpath anchors for the file you have open |
-| `Ctrl+Space` in `expr=""` | the same list, inline |
-| `Ctrl+Space` in `widget=""` | the widgets, with their modules |
-| `Ctrl+Space` after `t` in a template | the OWL directives |
-| `Ctrl+Space` in `t-call=""` or `static template = ""` | the templates that exist |
-| Problems panel | the OWL rules, while you type |
+| Problems panel | the warnings, while you type |
+| Run Task → *check for what 19 removed* | the removed-API sweep |
 
-From the terminal:
+From a terminal:
 
-```
+```bash
 python odoo-devkit/xpath_anchors.py base.view_partner_form --tree
-python odoo-devkit/widget_index.py
-python odoo-devkit/owl_index.py
+python odoo-devkit/odoo19_check.py
 python odoo-devkit/install.py --indexes-only     # after adding views
 ```
 
 ## Re-run the installer when
 
-* you add a module with a `static/src` (so its import alias exists), or
+* you add a module with a `static/src` — so its import alias exists, or
 * the Odoo source moves.
 
-`--force` replaces files you already have; without it they are kept and
-reported.
+`--force` replaces files you already have; without it they are kept and the
+skip is reported.
 
-## What it does not do
+## Licence
 
-`from odoo.addons.account.models...` will not resolve, in any editor. Odoo
-merges the addon directories into one namespace at runtime and no static
-analyser can reproduce that. Open the core file instead — the installer puts
-the source on the search path, so `Ctrl+P` reaches it.
-
-The Enterprise source is skipped everywhere it is found. A tool that offers an
-anchor or a widget from an Enterprise view is helping you write a module that
-installs locally and is missing on the customer's server.
+MIT. See [LICENSE](LICENSE).

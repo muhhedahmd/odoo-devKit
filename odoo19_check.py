@@ -7,7 +7,7 @@ then ignored, or they fail deep inside the view loader with a message that
 names the view and not the line.
 
     python odoo-devkit/odoo19_check.py                 # this project
-    python odoo-devkit/odoo19_check.py village_base    # one module
+    python odoo-devkit/odoo19_check.py my_module       # one module
 
 Each finding is printed as `path:line: message`, which editors turn into a
 clickable link.
