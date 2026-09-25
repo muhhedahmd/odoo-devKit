@@ -1,0 +1,290 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  A schema for Odoo data files, so the editor can offer the attributes rather
+  than you remembering them.
+
+  Odoo publishes none, which is why `<record>` has no completion anywhere and
+  a missing `model=` is only found at install. This is written to be
+  **permissive on purpose**:
+
+    * every element allows unknown attributes (`anyAttribute … lax`), so a
+      version that adds one does not paint the file red;
+    * the content of a `<field name="arch">` is skipped entirely — the view
+      language inside it is far too large and too version-dependent to
+      describe, and a wrong guess there would mean false errors on every line.
+
+  So what you get is completion and the genuinely required attributes
+  (`record` needs id and model, `field` needs name), and nothing else is
+  policed. That is the useful half.
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           elementFormDefault="qualified">
+
+  <!-- Anything goes inside: this is what a view's arch is made of. -->
+  <xs:complexType name="AnyContent" mixed="true">
+    <xs:sequence>
+      <xs:any minOccurs="0" maxOccurs="unbounded" processContents="skip"/>
+    </xs:sequence>
+    <xs:anyAttribute processContents="skip"/>
+  </xs:complexType>
+
+  <xs:element name="odoo" type="RootType"/>
+  <!-- Still accepted by Odoo 19, and still all over older modules. -->
+  <xs:element name="openerp" type="RootType"/>
+
+  <xs:complexType name="RootType">
+    <xs:choice minOccurs="0" maxOccurs="unbounded">
+      <xs:element name="data" type="DataType"/>
+      <xs:element ref="record"/>
+      <xs:element ref="menuitem"/>
+      <xs:element ref="template"/>
+      <xs:element ref="function"/>
+      <xs:element ref="delete"/>
+      <xs:element ref="report"/>
+      <xs:element ref="act_window"/>
+    </xs:choice>
+    <xs:attribute name="noupdate" type="ZeroOne">
+      <xs:annotation><xs:documentation>
+        1 means the records are written on install and never touched again by
+        an upgrade. Right for anything a customer edits — groups, rules, crons,
+        demo-ish defaults. Wrong for views, which then stop updating.
+      </xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:anyAttribute processContents="skip"/>
+  </xs:complexType>
+
+  <xs:complexType name="DataType">
+    <xs:choice minOccurs="0" maxOccurs="unbounded">
+      <xs:element ref="record"/>
+      <xs:element ref="menuitem"/>
+      <xs:element ref="template"/>
+      <xs:element ref="function"/>
+      <xs:element ref="delete"/>
+      <xs:element ref="report"/>
+      <xs:element ref="act_window"/>
+    </xs:choice>
+    <xs:attribute name="noupdate" type="ZeroOne"/>
+    <xs:attribute name="context" type="xs:string"/>
+    <xs:anyAttribute processContents="skip"/>
+  </xs:complexType>
+
+  <!-- ── record ───────────────────────────────────────────────────── -->
+  <xs:element name="record">
+    <xs:annotation><xs:documentation>
+      One row in one table. `id` becomes the external identifier
+      (module.id), which is what `ref=` and `%(…)d` resolve, and what makes
+      the row updatable on the next install instead of duplicated.
+    </xs:documentation></xs:annotation>
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="field" minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+      <xs:attribute name="id" type="xs:string" use="required">
+        <xs:annotation><xs:documentation>
+          The external id, unique in the module. Without it the row is
+          re-created on every upgrade instead of updated.
+        </xs:documentation></xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="model" type="xs:string" use="required">
+        <xs:annotation><xs:documentation>
+          The model to write to: ir.ui.view, ir.actions.act_window, ir.rule,
+          ir.cron, res.groups, ir.actions.report …
+        </xs:documentation></xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="context" type="xs:string"/>
+      <xs:attribute name="forcecreate" type="ZeroOne">
+        <xs:annotation><xs:documentation>
+          Under noupdate, create the row if it is missing rather than skipping
+          it. For a record added to an existing noupdate file.
+        </xs:documentation></xs:annotation>
+      </xs:attribute>
+      <xs:anyAttribute processContents="skip"/>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- ── field ────────────────────────────────────────────────────── -->
+  <xs:element name="field">
+    <xs:annotation><xs:documentation>
+      One value. Set it by text, or by `ref` (another record's external id),
+      or by `eval` (Python), or by `search` (a domain that picks the row).
+    </xs:documentation></xs:annotation>
+    <xs:complexType mixed="true">
+      <xs:sequence>
+        <xs:any minOccurs="0" maxOccurs="unbounded" processContents="skip"/>
+      </xs:sequence>
+      <xs:attribute name="name" type="xs:string" use="required"/>
+      <xs:attribute name="ref" type="xs:string">
+        <xs:annotation><xs:documentation>
+          Another record's external id — module.id. For a many2one.
+        </xs:documentation></xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="eval" type="xs:string">
+        <xs:annotation><xs:documentation>
+          Python. `[Command.link(ref('module.id'))]` for an x2many;
+          `True` / `False` for a boolean, which plain text cannot express.
+        </xs:documentation></xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="search" type="xs:string">
+        <xs:annotation><xs:documentation>
+          A domain that finds the record(s) to point at, when there is no
+          external id to use.
+        </xs:documentation></xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="model" type="xs:string"/>
+      <xs:attribute name="use" type="xs:string"/>
+      <xs:attribute name="file" type="xs:string"/>
+      <xs:attribute name="type">
+        <xs:annotation><xs:documentation>
+          xml for a view arch, html for an action's nocontent help, base64 for
+          a file, char/int/float/list/tuple for a literal.
+        </xs:documentation></xs:annotation>
+        <xs:simpleType>
+          <xs:restriction base="xs:string">
+            <xs:enumeration value="xml"/>
+            <xs:enumeration value="html"/>
+            <xs:enumeration value="base64"/>
+            <xs:enumeration value="char"/>
+            <xs:enumeration value="int"/>
+            <xs:enumeration value="float"/>
+            <xs:enumeration value="list"/>
+            <xs:enumeration value="tuple"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:attribute>
+      <xs:attribute name="position" type="xs:string"/>
+      <xs:anyAttribute processContents="skip"/>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- ── menuitem ─────────────────────────────────────────────────── -->
+  <xs:element name="menuitem">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="menuitem" minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+      <xs:attribute name="id" type="xs:string" use="required"/>
+      <xs:attribute name="name" type="xs:string">
+        <xs:annotation><xs:documentation>
+          Optional when `action` is set: the action's name is used. Set it when
+          the menu should read differently from the action.
+        </xs:documentation></xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="parent" type="xs:string"/>
+      <xs:attribute name="action" type="xs:string"/>
+      <xs:attribute name="sequence" type="xs:integer"/>
+      <xs:attribute name="groups" type="xs:string">
+        <xs:annotation><xs:documentation>
+          Comma-separated external ids. A menu with no groups is visible to
+          everyone who can reach the app.
+        </xs:documentation></xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="web_icon" type="xs:string">
+        <xs:annotation><xs:documentation>
+          module,path/to/icon.png — only on a top-level menu, and the file has
+          to exist or the module will not install.
+        </xs:documentation></xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="active" type="xs:string"/>
+      <xs:anyAttribute processContents="skip"/>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- ── template (a QWeb view) ───────────────────────────────────── -->
+  <xs:element name="template">
+    <xs:complexType mixed="true">
+      <xs:sequence>
+        <xs:any minOccurs="0" maxOccurs="unbounded" processContents="skip"/>
+      </xs:sequence>
+      <xs:attribute name="id" type="xs:string" use="required"/>
+      <xs:attribute name="name" type="xs:string"/>
+      <xs:attribute name="inherit_id" type="xs:string"/>
+      <xs:attribute name="primary" type="ZeroOne"/>
+      <xs:attribute name="priority" type="xs:integer"/>
+      <xs:attribute name="groups" type="xs:string"/>
+      <xs:attribute name="page" type="xs:string"/>
+      <xs:attribute name="active" type="xs:string"/>
+      <xs:attribute name="track" type="xs:string"/>
+      <xs:anyAttribute processContents="skip"/>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- ── function / value ─────────────────────────────────────────── -->
+  <xs:element name="function">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="value" minOccurs="0" maxOccurs="unbounded"/>
+        <xs:element ref="function" minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+      <xs:attribute name="model" type="xs:string" use="required"/>
+      <xs:attribute name="name" type="xs:string" use="required"/>
+      <xs:attribute name="eval" type="xs:string"/>
+      <xs:anyAttribute processContents="skip"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="value">
+    <xs:complexType mixed="true">
+      <xs:attribute name="name" type="xs:string"/>
+      <xs:attribute name="model" type="xs:string"/>
+      <xs:attribute name="eval" type="xs:string"/>
+      <xs:attribute name="search" type="xs:string"/>
+      <xs:attribute name="type" type="xs:string"/>
+      <xs:anyAttribute processContents="skip"/>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- ── delete ───────────────────────────────────────────────────── -->
+  <xs:element name="delete">
+    <xs:complexType>
+      <xs:attribute name="model" type="xs:string" use="required"/>
+      <xs:attribute name="id" type="xs:string"/>
+      <xs:attribute name="search" type="xs:string"/>
+      <xs:anyAttribute processContents="skip"/>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- ── report / act_window shorthands ───────────────────────────── -->
+  <xs:element name="report">
+    <xs:complexType>
+      <xs:attribute name="id" type="xs:string" use="required"/>
+      <xs:attribute name="model" type="xs:string" use="required"/>
+      <xs:attribute name="string" type="xs:string" use="required"/>
+      <xs:attribute name="name" type="xs:string" use="required"/>
+      <xs:attribute name="file" type="xs:string"/>
+      <xs:attribute name="report_type" type="xs:string"/>
+      <xs:attribute name="print_report_name" type="xs:string"/>
+      <xs:attribute name="paperformat" type="xs:string"/>
+      <xs:attribute name="attachment" type="xs:string"/>
+      <xs:attribute name="attachment_use" type="xs:string"/>
+      <xs:attribute name="menu" type="xs:string"/>
+      <xs:attribute name="groups" type="xs:string"/>
+      <xs:anyAttribute processContents="skip"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="act_window">
+    <xs:complexType>
+      <xs:attribute name="id" type="xs:string" use="required"/>
+      <xs:attribute name="name" type="xs:string" use="required"/>
+      <xs:attribute name="res_model" type="xs:string" use="required"/>
+      <xs:attribute name="view_mode" type="xs:string"/>
+      <xs:attribute name="domain" type="xs:string"/>
+      <xs:attribute name="context" type="xs:string"/>
+      <xs:attribute name="target" type="xs:string"/>
+      <xs:attribute name="limit" type="xs:integer"/>
+      <xs:attribute name="groups" type="xs:string"/>
+      <xs:attribute name="binding_model" type="xs:string"/>
+      <xs:attribute name="binding_type" type="xs:string"/>
+      <xs:attribute name="binding_views" type="xs:string"/>
+      <xs:anyAttribute processContents="skip"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:simpleType name="ZeroOne">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="0"/>
+      <xs:enumeration value="1"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+</xs:schema>

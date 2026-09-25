@@ -1,0 +1,37 @@
+{
+  "name": "odoo-xpath",
+  "displayName": "Odoo xpath anchors",
+  "description": "Completion inside <xpath expr=\"\">, from the view the record actually inherits.",
+  "version": "0.0.1",
+  "publisher": "local",
+  "private": true,
+  "license": "MIT",
+  "engines": { "vscode": "^1.75.0" },
+  "categories": ["Programming Languages"],
+  "activationEvents": ["onLanguage:xml"],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "odooXpath.rebuild",
+        "title": "Odoo: rebuild the xpath index",
+        "category": "Odoo"
+      },
+      {
+        "command": "odooXpath.showParent",
+        "title": "Odoo: show the inherited view's anchors",
+        "category": "Odoo"
+      }
+    ],
+    "configuration": {
+      "title": "Odoo xpath anchors",
+      "properties": {
+        "odooXpath.pythonPath": {
+          "type": "string",
+          "default": "python",
+          "description": "Python used to build the index."
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,906 @@
+{
+  // Autocomplete for the things VS Code cannot infer: a manifest is a bare
+  // dict, and Odoo publishes no XML schema, so there is nothing to infer from
+  // and the keys are typed out here once instead.
+  //
+  // Every prefix starts with "o". That is deliberate: `depends`, `data`,
+  // `form`, `list`, `group`, `create` and `report` are words you type all day,
+  // and snippets on those prefixes fire constantly and bury the real
+  // completions. Type `o` and the list is ours alone.
+  //
+  // Tab to expand, Tab again to move between the holes.
+
+  "Odoo manifest": {
+    "scope": "python",
+    "prefix": "oman",
+    "body": [
+      "# -*- coding: utf-8 -*-",
+      "{",
+      "    'name': '${1:Module name}',",
+      "    # Bump on EVERY change, schema or asset. Odoo.sh decides whether to",
+      "    # run a module update by comparing this string: a new model whose",
+      "    # version did not move is deployed as Python but never gets its",
+      "    # table, and an asset change without a bump keeps serving the old",
+      "    # bundle. Both failures are silent.",
+      "    'version': '19.0.1.0.0',",
+      "    'category': '${2:Services}',",
+      "    'summary': '${3:One line, shown under the name in Apps}',",
+      "    'description': \"\"\"",
+      "${1:Module name}",
+      "==============",
+      "",
+      "$4",
+      "    \"\"\",",
+      "    'author': 'Mohamed Soliman',",
+      "    'license': 'OPL-1',",
+      "    'depends': [",
+      "        '${5:base}',",
+      "    ],",
+      "    'data': [",
+      "        'security/ir.model.access.csv',",
+      "        # Order matters: an action must be declared before a view that",
+      "        # refers to it with %(...)d.",
+      "        '${6:views/views.xml}',",
+      "        'views/menus.xml',",
+      "    ],",
+      "    'installable': True,",
+      "}"
+    ],
+    "description": "A full Odoo 19 manifest, with the version-bump rule in it"
+  },
+  "manifest key: depends": {
+    "scope": "python",
+    "prefix": "odepends",
+    "body": [
+      "'depends': [",
+      "    '${1:base}',",
+      "],"
+    ]
+  },
+  "manifest key: data": {
+    "scope": "python",
+    "prefix": "odata",
+    "body": [
+      "'data': [",
+      "    '${1:views/views.xml}',",
+      "],"
+    ]
+  },
+  "manifest key: assets": {
+    "scope": "python",
+    "prefix": "oassets",
+    "body": [
+      "'assets': {",
+      "    'web.assets_backend': [",
+      "        '${1:module}/static/src/**/*',",
+      "    ],",
+      "},"
+    ]
+  },
+  "manifest key: application": {
+    "scope": "python",
+    "prefix": "oapp",
+    "body": [
+      "'application': True,"
+    ]
+  },
+  "manifest key: external_dependencies": {
+    "scope": "python",
+    "prefix": "oextdep",
+    "body": [
+      "# Odoo.sh installs these from the ROOT requirements.txt, not from here.",
+      "'external_dependencies': {'python': ['${1:shapely}']},"
+    ]
+  },
+  "Odoo model": {
+    "scope": "python",
+    "prefix": "omodel",
+    "body": [
+      "class ${1:ClassName}(models.Model):",
+      "    _name = \"${2:my.model}\"",
+      "    _description = \"${3:What it is, in one line}\"",
+      "    _inherit = [\"mail.thread\"]",
+      "    _order = \"${4:name}\"",
+      "",
+      "    name = fields.Char(required=True, tracking=True)",
+      "    active = fields.Boolean(default=True)",
+      "    company_id = fields.Many2one(",
+      "        \"res.company\", required=True, index=True,",
+      "        default=lambda self: self.env.company)",
+      "$0"
+    ]
+  },
+  "Odoo model (inherit)": {
+    "scope": "python",
+    "prefix": "oinherit",
+    "body": [
+      "class ${1:ClassName}(models.Model):",
+      "    _inherit = \"${2:res.partner}\"",
+      "",
+      "    $0"
+    ]
+  },
+  "field: Char": {
+    "scope": "python",
+    "prefix": "ochar",
+    "body": [
+      "${1:name} = fields.Char(string=\"${2:Label}\", help=\"${3:Why it exists}\")"
+    ]
+  },
+  "field: Text": {
+    "scope": "python",
+    "prefix": "otext",
+    "body": [
+      "${1:note} = fields.Text()"
+    ]
+  },
+  "field: Boolean": {
+    "scope": "python",
+    "prefix": "obool",
+    "body": [
+      "${1:flag} = fields.Boolean(string=\"${2:Label}\", default=${3:False})"
+    ]
+  },
+  "field: Integer": {
+    "scope": "python",
+    "prefix": "oint",
+    "body": [
+      "${1:count} = fields.Integer(string=\"${2:Label}\")"
+    ]
+  },
+  "field: Float": {
+    "scope": "python",
+    "prefix": "ofloat",
+    "body": [
+      "${1:qty} = fields.Float(string=\"${2:Label}\", digits=(12, 2))"
+    ]
+  },
+  "field: Monetary": {
+    "scope": "python",
+    "prefix": "omoney",
+    "body": [
+      "${1:amount} = fields.Monetary(",
+      "    string=\"${2:Label}\", currency_field=\"currency_id\")"
+    ],
+    "description": "Monetary needs a currency field on the model or it fails at install"
+  },
+  "field: Date": {
+    "scope": "python",
+    "prefix": "odate",
+    "body": [
+      "${1:date} = fields.Date(default=fields.Date.context_today)"
+    ]
+  },
+  "field: Datetime": {
+    "scope": "python",
+    "prefix": "odatetime",
+    "body": [
+      "${1:date} = fields.Datetime(default=fields.Datetime.now)"
+    ]
+  },
+  "field: Selection": {
+    "scope": "python",
+    "prefix": "osel",
+    "body": [
+      "${1:state} = fields.Selection(",
+      "    [(\"${2:draft}\", \"${3:Draft}\"), (\"${4:done}\", \"${5:Done}\")],",
+      "    default=\"${2:draft}\", required=True, tracking=True)"
+    ]
+  },
+  "field: Many2one": {
+    "scope": "python",
+    "prefix": "om2o",
+    "body": [
+      "${1:partner}_id = fields.Many2one(",
+      "    \"${2:res.partner}\", string=\"${3:Label}\", index=True,",
+      "    ondelete=\"${4|restrict,cascade,set null|}\")"
+    ],
+    "description": "ondelete is required thinking: restrict keeps history, cascade loses it"
+  },
+  "field: One2many": {
+    "scope": "python",
+    "prefix": "oo2m",
+    "body": [
+      "${1:line}_ids = fields.One2many(\"${2:my.model.line}\", \"${3:parent}_id\")"
+    ]
+  },
+  "field: Many2many": {
+    "scope": "python",
+    "prefix": "om2m",
+    "body": [
+      "${1:tag}_ids = fields.Many2many(",
+      "    \"${2:res.partner}\", string=\"${3:Label}\")"
+    ]
+  },
+  "field: related": {
+    "scope": "python",
+    "prefix": "orelated",
+    "body": [
+      "${1:company}_id = fields.Many2one(related=\"${2:parent_id.company_id}\", store=True, index=True)"
+    ]
+  },
+  "field: computed and stored": {
+    "scope": "python",
+    "prefix": "ocompute",
+    "body": [
+      "${1:total} = fields.${2|Float,Monetary,Char,Boolean,Integer,Many2one|}(",
+      "    compute=\"_compute_${1:total}\", store=True)",
+      "",
+      "@api.depends(\"${3:line_ids.amount}\")",
+      "def _compute_${1:total}(self):",
+      "    for record in self:",
+      "        record.${1:total} = $0"
+    ],
+    "description": "Stored means searchable and indexable — and means a cron if it depends on today"
+  },
+  "field: Image": {
+    "scope": "python",
+    "prefix": "oimage",
+    "body": [
+      "${1:photo} = fields.Image(max_width=${2:1024}, max_height=${2:1024})"
+    ]
+  },
+  "api.depends": {
+    "scope": "python",
+    "prefix": "odep",
+    "body": [
+      "@api.depends(\"${1:field}\")",
+      "def _compute_${2:name}(self):",
+      "    for record in self:",
+      "        record.${2:name} = $0"
+    ]
+  },
+  "api.constrains": {
+    "scope": "python",
+    "prefix": "oconstrains",
+    "body": [
+      "@api.constrains(\"${1:field}\")",
+      "def _check_${2:name}(self):",
+      "    for record in self:",
+      "        if ${3:condition}:",
+      "            raise ValidationError(_(\"${4:What is wrong and what to do.}\"))"
+    ]
+  },
+  "api.onchange": {
+    "scope": "python",
+    "prefix": "oonchange",
+    "body": [
+      "@api.onchange(\"${1:field}\")",
+      "def _onchange_${1:field}(self):",
+      "    $0"
+    ]
+  },
+  "api.model_create_multi": {
+    "scope": "python",
+    "prefix": "ocreate",
+    "body": [
+      "@api.model_create_multi",
+      "def create(self, vals_list):",
+      "    records = super().create(vals_list)",
+      "    $0",
+      "    return records"
+    ]
+  },
+  "SQL constraint (Odoo 19)": {
+    "scope": "python",
+    "prefix": "oconstraint",
+    "body": [
+      "# Odoo 19: _sql_constraints is ignored in silence. models.Constraint is",
+      "# the one that reaches the database.",
+      "_${1:name}_unique = models.Constraint(",
+      "    \"unique(${2:column})\",",
+      "    \"${3:What the user is told when it fires.}\",",
+      ")"
+    ]
+  },
+  "read_group": {
+    "scope": "python",
+    "prefix": "oreadgroup",
+    "body": [
+      "data = self.env[\"${1:my.model}\"]._read_group(",
+      "    [(\"${2:parent_id}\", \"in\", self.ids)], groupby=[\"${2:parent_id}\"],",
+      "    aggregates=[\"__count\", \"${3:amount}:sum\"])",
+      "$0"
+    ],
+    "description": "Grouped rather than looped — a compute that reads every child times out on real data"
+  },
+  "action: window": {
+    "scope": "python",
+    "prefix": "oaction",
+    "body": [
+      "def action_${1:open}(self):",
+      "    self.ensure_one()",
+      "    return {",
+      "        \"type\": \"ir.actions.act_window\",",
+      "        \"name\": _(\"${2:Title}\"),",
+      "        \"res_model\": \"${3:my.model}\",",
+      "        \"view_mode\": \"list,form\",",
+      "        \"domain\": [(\"${4:parent_id}\", \"=\", self.id)],",
+      "        \"context\": {\"default_${4:parent_id}\": self.id},",
+      "    }"
+    ]
+  },
+  "cron method": {
+    "scope": "python",
+    "prefix": "ocronmethod",
+    "body": [
+      "@api.model",
+      "def _cron_${1:name}(self):",
+      "    \"\"\"${2:Why a stored field needs a nightly pass.}\"\"\"",
+      "    $0"
+    ]
+  },
+  "odoo XML file": {
+    "scope": "xml",
+    "prefix": "oxml",
+    "body": [
+      "<?xml version=\"1.0\" encoding=\"utf-8\"?>",
+      "<odoo>",
+      "",
+      "    $0",
+      "",
+      "</odoo>"
+    ]
+  },
+  "view: form": {
+    "scope": "xml",
+    "prefix": "oform",
+    "body": [
+      "<record id=\"view_${1:model}_form\" model=\"ir.ui.view\">",
+      "    <field name=\"name\">${2:my.model}.form</field>",
+      "    <field name=\"model\">${2:my.model}</field>",
+      "    <field name=\"arch\" type=\"xml\">",
+      "        <form string=\"${3:Title}\">",
+      "            <header>",
+      "                <field name=\"state\" widget=\"statusbar\" readonly=\"1\"/>",
+      "            </header>",
+      "            <sheet>",
+      "                <div class=\"oe_button_box\" name=\"button_box\"/>",
+      "                <div class=\"oe_title\">",
+      "                    <h1><field name=\"name\"/></h1>",
+      "                </div>",
+      "                <group>",
+      "                    <group>",
+      "                        $0",
+      "                    </group>",
+      "                    <group>",
+      "                    </group>",
+      "                </group>",
+      "            </sheet>",
+      "            <chatter/>",
+      "        </form>",
+      "    </field>",
+      "</record>"
+    ]
+  },
+  "view: list": {
+    "scope": "xml",
+    "prefix": "olist",
+    "body": [
+      "<record id=\"view_${1:model}_list\" model=\"ir.ui.view\">",
+      "    <field name=\"name\">${2:my.model}.list</field>",
+      "    <field name=\"model\">${2:my.model}</field>",
+      "    <field name=\"arch\" type=\"xml\">",
+      "        <list>",
+      "            <field name=\"${3:name}\"/>",
+      "            $0",
+      "        </list>",
+      "    </field>",
+      "</record>"
+    ],
+    "description": "list, not tree — tree was renamed in Odoo 17"
+  },
+  "view: search": {
+    "scope": "xml",
+    "prefix": "osearch",
+    "body": [
+      "<record id=\"view_${1:model}_search\" model=\"ir.ui.view\">",
+      "    <field name=\"name\">${2:my.model}.search</field>",
+      "    <field name=\"model\">${2:my.model}</field>",
+      "    <field name=\"arch\" type=\"xml\">",
+      "        <search>",
+      "            <field name=\"${3:name}\"/>",
+      "            <separator/>",
+      "            <filter name=\"${4:mine}\" string=\"${5:Label}\" domain=\"[]\"/>",
+      "            <!-- Odoo 19 removed expand= and string= from a group inside",
+      "                 a search view; a bare <group> is what core writes. -->",
+      "            <group>",
+      "                <filter name=\"g_${6:field}\" string=\"${7:Label}\"",
+      "                        context=\"{'group_by': '${6:field}'}\"/>",
+      "            </group>",
+      "        </search>",
+      "    </field>",
+      "</record>"
+    ]
+  },
+  "view: inherit": {
+    "scope": "xml",
+    "prefix": "oviewinherit",
+    "body": [
+      "<record id=\"view_${1:model}_form_${2:mine}\" model=\"ir.ui.view\">",
+      "    <field name=\"name\">${3:my.model}.form.${2:mine}</field>",
+      "    <field name=\"model\">${3:my.model}</field>",
+      "    <field name=\"inherit_id\" ref=\"${4:module.view_id}\"/>",
+      "    <field name=\"arch\" type=\"xml\">",
+      "        <xpath expr=\"${5://notebook}\" position=\"${6|inside,after,before,replace,attributes|}\">",
+      "            $0",
+      "        </xpath>",
+      "    </field>",
+      "</record>"
+    ]
+  },
+  "action window": {
+    "scope": "xml",
+    "prefix": "oact",
+    "body": [
+      "<record id=\"action_${1:model}\" model=\"ir.actions.act_window\">",
+      "    <field name=\"name\">${2:Title}</field>",
+      "    <field name=\"res_model\">${3:my.model}</field>",
+      "    <field name=\"view_mode\">list,form</field>",
+      "    <field name=\"help\" type=\"html\">",
+      "        <p class=\"o_view_nocontent_smiling_face\">${4:Add the first one}</p>",
+      "        <p>$0</p>",
+      "    </field>",
+      "</record>"
+    ]
+  },
+  "menuitem": {
+    "scope": "xml",
+    "prefix": "omenu",
+    "body": [
+      "<menuitem id=\"menu_${1:name}\" name=\"${2:Label}\" parent=\"${3:parent_menu}\"",
+      "          action=\"${4:action_id}\" sequence=\"${5:10}\"/>"
+    ]
+  },
+  "stat button": {
+    "scope": "xml",
+    "prefix": "ostat",
+    "body": [
+      "<button name=\"${1:%(action_x)d}\" type=\"${2|action,object|}\"",
+      "        class=\"oe_stat_button\" icon=\"fa-${3:list}\"",
+      "        context=\"{'search_default_${4:parent_id}': id}\">",
+      "    <field name=\"${5:count}\" widget=\"statinfo\" string=\"${6:Label}\"/>",
+      "</button>"
+    ]
+  },
+  "notebook page": {
+    "scope": "xml",
+    "prefix": "opage",
+    "body": [
+      "<notebook>",
+      "    <page string=\"${1:Label}\" name=\"${2:name}\">",
+      "        $0",
+      "    </page>",
+      "</notebook>"
+    ]
+  },
+  "ir.rule": {
+    "scope": "xml",
+    "prefix": "orule",
+    "body": [
+      "<record id=\"rule_${1:name}\" model=\"ir.rule\">",
+      "    <field name=\"name\">${2:What it restricts}</field>",
+      "    <field name=\"model_id\" ref=\"model_${3:my_model}\"/>",
+      "    <field name=\"domain_force\">[('${4:partner_id}', '=', user.partner_id.id)]</field>",
+      "    <field name=\"groups\" eval=\"[Command.link(ref('${5:base.group_portal}'))]\"/>",
+      "</record>"
+    ]
+  },
+  "res.groups (Odoo 19)": {
+    "scope": "xml",
+    "prefix": "ogroup",
+    "body": [
+      "<!-- Odoo 19: res.groups lost category_id and points at a",
+      "     res.groups.privilege instead. The old field fails the install. -->",
+      "<record id=\"group_${1:name}\" model=\"res.groups\">",
+      "    <field name=\"name\">${2:Label}</field>",
+      "    <field name=\"sequence\">${3:10}</field>",
+      "    <field name=\"privilege_id\" ref=\"${4:privilege_x}\"/>",
+      "    <field name=\"implied_ids\" eval=\"[Command.link(ref('${5:base.group_user}'))]\"/>",
+      "    <field name=\"comment\">$0</field>",
+      "</record>"
+    ]
+  },
+  "ir.cron": {
+    "scope": "xml",
+    "prefix": "ocron",
+    "body": [
+      "<record id=\"cron_${1:name}\" model=\"ir.cron\">",
+      "    <field name=\"name\">${2:Label}</field>",
+      "    <field name=\"model_id\" ref=\"model_${3:my_model}\"/>",
+      "    <field name=\"state\">code</field>",
+      "    <field name=\"code\">model._cron_${1:name}()</field>",
+      "    <field name=\"interval_number\">1</field>",
+      "    <field name=\"interval_type\">days</field>",
+      "    <field name=\"active\" eval=\"True\"/>",
+      "</record>"
+    ]
+  },
+  "QWeb report": {
+    "scope": "xml",
+    "prefix": "oreport",
+    "body": [
+      "<template id=\"report_${1:name}_document\">",
+      "    <t t-call=\"web.external_layout\">",
+      "        <div class=\"page\">",
+      "            $0",
+      "        </div>",
+      "    </t>",
+      "</template>",
+      "",
+      "<template id=\"report_${1:name}\">",
+      "    <t t-call=\"web.html_container\">",
+      "        <t t-foreach=\"docs\" t-as=\"doc\">",
+      "            <t t-call=\"${2:module}.report_${1:name}_document\"/>",
+      "        </t>",
+      "    </t>",
+      "</template>",
+      "",
+      "<record id=\"action_report_${1:name}\" model=\"ir.actions.report\">",
+      "    <field name=\"name\">${3:Title}</field>",
+      "    <field name=\"model\">${4:my.model}</field>",
+      "    <field name=\"report_type\">qweb-pdf</field>",
+      "    <field name=\"report_name\">${2:module}.report_${1:name}</field>",
+      "    <field name=\"report_file\">${2:module}.report_${1:name}</field>",
+      "    <field name=\"binding_model_id\" ref=\"model_${5:my_model}\"/>",
+      "    <field name=\"binding_type\">report</field>",
+      "</record>"
+    ]
+  },
+  "xpath": {
+    "scope": "xml",
+    "prefix": "oxpath",
+    "body": [
+      "<xpath expr=\"${1://field[@name='${2:name}']}\" position=\"${3|after,before,inside,replace,attributes,move|}\">",
+      "    $0",
+      "</xpath>"
+    ],
+    "description": "The generic one. position=move relocates an existing node instead of copying it."
+  },
+  "xpath: after a field": {
+    "scope": "xml",
+    "prefix": "oxpfield",
+    "body": [
+      "<xpath expr=\"//field[@name='${1:name}']\" position=\"${2|after,before,replace|}\">",
+      "    <field name=\"${3:my_field}\"/>",
+      "</xpath>"
+    ]
+  },
+  "xpath: short form (no xpath)": {
+    "scope": "xml",
+    "prefix": "oxpshort",
+    "body": [
+      "<!-- Shorter than an xpath and matches the first node with that",
+      "     name, which is what you meant anyway. -->",
+      "<field name=\"${1:name}\" position=\"${2|after,before,replace,attributes|}\">",
+      "    $0",
+      "</field>"
+    ]
+  },
+  "xpath: button box": {
+    "scope": "xml",
+    "prefix": "oxpbuttonbox",
+    "body": [
+      "<xpath expr=\"//div[@name='button_box']\" position=\"inside\">",
+      "    <button name=\"${1:%(action_x)d}\" type=\"${2|action,object|}\"",
+      "            class=\"oe_stat_button\" icon=\"fa-${3:list}\"",
+      "            context=\"{'search_default_${4:parent_id}': id}\">",
+      "        <field name=\"${5:count}\" widget=\"statinfo\" string=\"${6:Label}\"/>",
+      "    </button>",
+      "</xpath>"
+    ],
+    "description": "The stat buttons. res.partner and most core forms have this div."
+  },
+  "xpath: new notebook page": {
+    "scope": "xml",
+    "prefix": "oxppage",
+    "body": [
+      "<xpath expr=\"//notebook\" position=\"inside\">",
+      "    <page string=\"${1:Label}\" name=\"${2:name}\">",
+      "        $0",
+      "    </page>",
+      "</xpath>"
+    ],
+    "description": "Fails if the parent form has no notebook — check before assuming one"
+  },
+  "xpath: inside a named page": {
+    "scope": "xml",
+    "prefix": "oxpinpage",
+    "body": [
+      "<xpath expr=\"//page[@name='${1:name}']\" position=\"inside\">",
+      "    $0",
+      "</xpath>"
+    ]
+  },
+  "xpath: header": {
+    "scope": "xml",
+    "prefix": "oxpheader",
+    "body": [
+      "<xpath expr=\"//header\" position=\"inside\">",
+      "    <button name=\"${1:action_x}\" type=\"object\" string=\"${2:Label}\"",
+      "            class=\"btn-primary\"/>",
+      "</xpath>"
+    ]
+  },
+  "xpath: sheet": {
+    "scope": "xml",
+    "prefix": "oxpsheet",
+    "body": [
+      "<xpath expr=\"//sheet\" position=\"${1|inside,before|}\">",
+      "    $0",
+      "</xpath>"
+    ]
+  },
+  "xpath: a named group": {
+    "scope": "xml",
+    "prefix": "oxpgroup",
+    "body": [
+      "<xpath expr=\"//group[@name='${1:name}']\" position=\"inside\">",
+      "    <field name=\"${2:my_field}\"/>",
+      "</xpath>"
+    ]
+  },
+  "xpath: by class": {
+    "scope": "xml",
+    "prefix": "oxpclass",
+    "body": [
+      "<!-- hasclass() is Odoo's own extension: class=\"a b\" is one",
+      "     attribute, so matching on @class only works if you spell the",
+      "     whole string. -->",
+      "<xpath expr=\"//div[hasclass('${1:oe_title}')]\" position=\"${2|inside,after,before|}\">",
+      "    $0",
+      "</xpath>"
+    ]
+  },
+  "xpath: change attributes": {
+    "scope": "xml",
+    "prefix": "oxpattr",
+    "body": [
+      "<xpath expr=\"//field[@name='${1:name}']\" position=\"attributes\">",
+      "    <attribute name=\"${2|invisible,readonly,required,string,options,widget,domain,context,optional|}\">${3:value}</attribute>",
+      "</xpath>"
+    ],
+    "description": "An empty attribute value removes it. This is how you unhide a core field."
+  },
+  "xpath: a list column": {
+    "scope": "xml",
+    "prefix": "oxplist",
+    "body": [
+      "<xpath expr=\"//list/field[@name='${1:name}']\" position=\"${2|after,before|}\">",
+      "    <field name=\"${3:my_field}\" optional=\"${4|show,hide|}\"/>",
+      "</xpath>"
+    ]
+  },
+  "xpath: a search filter": {
+    "scope": "xml",
+    "prefix": "oxpfilter",
+    "body": [
+      "<xpath expr=\"//filter[@name='${1:name}']\" position=\"after\">",
+      "    <filter name=\"${2:mine}\" string=\"${3:Label}\" domain=\"[]\"/>",
+      "</xpath>"
+    ]
+  },
+  "xpath: nth match": {
+    "scope": "xml",
+    "prefix": "oxpnth",
+    "body": [
+      "<!-- Last resort. A position index breaks the day somebody adds a",
+      "     field above it, and it breaks silently into the wrong place. -->",
+      "<xpath expr=\"(//${1:group})[${2:2}]\" position=\"${3|inside,after|}\">",
+      "    $0",
+      "</xpath>"
+    ]
+  },
+  "action: act_window (full)": {
+    "scope": "xml",
+    "prefix": "oactwin",
+    "body": [
+      "<record id=\"action_${1:model}\" model=\"ir.actions.act_window\">",
+      "    <field name=\"name\">${2:Title}</field>",
+      "    <field name=\"res_model\">${3:my.model}</field>",
+      "    <field name=\"view_mode\">${4|list\\,form,list\\,kanban\\,form,kanban\\,list\\,form,form,list|}</field>",
+      "    <field name=\"domain\">[]</field>",
+      "    <field name=\"context\">{}</field>",
+      "    <field name=\"help\" type=\"html\">",
+      "        <p class=\"o_view_nocontent_smiling_face\">${5:Add the first one}</p>",
+      "        <p>$0</p>",
+      "    </field>",
+      "</record>"
+    ],
+    "description": "view_mode is list,form — tree was renamed in Odoo 17"
+  },
+  "action: act_window (a wizard)": {
+    "scope": "xml",
+    "prefix": "oactwiz",
+    "body": [
+      "<record id=\"action_${1:name}\" model=\"ir.actions.act_window\">",
+      "    <field name=\"name\">${2:Title}</field>",
+      "    <field name=\"res_model\">${3:my.wizard}</field>",
+      "    <field name=\"view_mode\">form</field>",
+      "    <!-- new = a dialog. Without it the wizard opens as a full page",
+      "         and the Cancel button leaves the user nowhere. -->",
+      "    <field name=\"target\">new</field>",
+      "</record>"
+    ]
+  },
+  "action: act_window (specific views)": {
+    "scope": "xml",
+    "prefix": "oactviews",
+    "body": [
+      "<record id=\"action_${1:model}\" model=\"ir.actions.act_window\">",
+      "    <field name=\"name\">${2:Title}</field>",
+      "    <field name=\"res_model\">${3:my.model}</field>",
+      "    <field name=\"view_mode\">list,form</field>",
+      "    <!-- Pins the exact views. Only needed when the default pick is",
+      "         wrong — two list views on one model, say. -->",
+      "    <field name=\"view_ids\" eval=\"[",
+      "        Command.clear(),",
+      "        Command.create({'view_mode': 'list', 'view_id': ref('${4:view_x_list}')}),",
+      "        Command.create({'view_mode': 'form', 'view_id': ref('${5:view_x_form}')}),",
+      "    ]\"/>",
+      "    <field name=\"search_view_id\" ref=\"${6:view_x_search}\"/>",
+      "</record>"
+    ]
+  },
+  "action: in the cog menu (binding)": {
+    "scope": "xml",
+    "prefix": "oactbinding",
+    "body": [
+      "<!-- Puts it in the Action cog of another model's views. -->",
+      "<field name=\"binding_model_id\" ref=\"${1:model_res_partner}\"/>",
+      "<field name=\"binding_type\">${2|action,report|}</field>",
+      "<field name=\"binding_view_types\">${3|list\\,form,list,form|}</field>"
+    ]
+  },
+  "action: server (code)": {
+    "scope": "xml",
+    "prefix": "oactserver",
+    "body": [
+      "<record id=\"action_${1:name}\" model=\"ir.actions.server\">",
+      "    <field name=\"name\">${2:Title}</field>",
+      "    <field name=\"model_id\" ref=\"${3:model_my_model}\"/>",
+      "    <field name=\"state\">code</field>",
+      "    <!-- `records` is the selection, `model` the model itself. -->",
+      "    <field name=\"code\">records.${4:action_do_something}()</field>",
+      "    <field name=\"binding_model_id\" ref=\"${3:model_my_model}\"/>",
+      "    <field name=\"binding_view_types\">list,form</field>",
+      "</record>"
+    ]
+  },
+  "action: client": {
+    "scope": "xml",
+    "prefix": "oactclient",
+    "body": [
+      "<record id=\"action_${1:name}\" model=\"ir.actions.client\">",
+      "    <field name=\"name\">${2:Title}</field>",
+      "    <!-- Must match the tag the JS registers in",
+      "         registry.category(\"actions\"), or opening it raises",
+      "         KeyNotFoundError and nothing says which side is wrong. -->",
+      "    <field name=\"tag\">${3:module.tag}</field>",
+      "    <field name=\"target\">${4|current,new,fullscreen|}</field>",
+      "</record>"
+    ]
+  },
+  "action: url": {
+    "scope": "xml",
+    "prefix": "oacturl",
+    "body": [
+      "<record id=\"action_${1:name}\" model=\"ir.actions.act_url\">",
+      "    <field name=\"name\">${2:Title}</field>",
+      "    <field name=\"url\">${3:/web}</field>",
+      "    <field name=\"target\">${4|new,self,download|}</field>",
+      "</record>"
+    ]
+  },
+  "action: default filter via context": {
+    "scope": "xml",
+    "prefix": "oactctx",
+    "body": [
+      "<!-- search_default_<filter name> ticks a filter; ",
+      "     search_default_<field> fills a field; default_<field> presets",
+      "     it on create. -->",
+      "<field name=\"context\">{'search_default_${1:filter_name}': 1, 'default_${2:field}': ${3:False}}</field>"
+    ]
+  },
+  "owl: imports": {
+    "scope": "javascript",
+    "prefix": "oimport",
+    "body": [
+      "/** @odoo-module **/",
+      "",
+      "import { Component, useState, onWillStart, onMounted, useRef } from \"@odoo/owl\";",
+      "import { registry } from \"@web/core/registry\";",
+      "import { useService } from \"@web/core/utils/hooks\";",
+      "$0"
+    ],
+    "description": "@odoo-module is not an import — every name still has to be imported"
+  },
+  "owl: component": {
+    "scope": "javascript",
+    "prefix": "ocomp",
+    "body": [
+      "/** @odoo-module **/",
+      "",
+      "import { Component, useState, onWillStart } from \"@odoo/owl\";",
+      "import { registry } from \"@web/core/registry\";",
+      "import { useService } from \"@web/core/utils/hooks\";",
+      "",
+      "export class ${1:MyComponent} extends Component {",
+      "    static template = \"${2:module}.${1:MyComponent}\";",
+      "    static props = {};",
+      "",
+      "    setup() {",
+      "        this.orm = useService(\"orm\");",
+      "        this.state = useState({ ${3:loading}: true });",
+      "",
+      "        onWillStart(async () => {",
+      "            $0",
+      "            this.state.${3:loading} = false;",
+      "        });",
+      "    }",
+      "}",
+      "",
+      "registry.category(\"actions\").add(\"${2:module}.${4:action_tag}\", ${1:MyComponent});"
+    ],
+    "description": "A client action component, the Odoo 17+ shape"
+  },
+  "owl: service": {
+    "scope": "javascript",
+    "prefix": "oservice",
+    "body": [
+      "this.${1|orm,action,notification,dialog,rpc,user,company,router,http|} = useService(\"${1|orm,action,notification,dialog,rpc,user,company,router,http|}\");"
+    ]
+  },
+  "owl: orm read": {
+    "scope": "javascript",
+    "prefix": "oorm",
+    "body": [
+      "const ${1:records} = await this.orm.searchRead(",
+      "    \"${2:my.model}\", [[\"${3:state}\", \"=\", \"${4:done}\"]], [${5:\"name\"}],",
+      "    { limit: ${6:80} }",
+      ");$0"
+    ],
+    "description": "searchRead — one round trip, unlike search then read"
+  },
+  "owl: patch an existing class": {
+    "scope": "javascript",
+    "prefix": "opatch",
+    "body": [
+      "/** @odoo-module **/",
+      "",
+      "import { patch } from \"@web/core/utils/patch\";",
+      "import { ${1:FormController} } from \"@web/views/form/form_controller\";",
+      "",
+      "patch(${1:FormController}.prototype, {",
+      "    ${2:setup}() {",
+      "        super.${2:setup}(...arguments);",
+      "        $0",
+      "    },",
+      "});"
+    ],
+    "description": "Odoo 17+ patch: a plain object, and super works"
+  },
+  "owl: register a field widget": {
+    "scope": "javascript",
+    "prefix": "ofieldwidget",
+    "body": [
+      "export const ${1:myField} = {",
+      "    component: ${2:MyFieldComponent},",
+      "    displayName: _t(\"${3:Label}\"),",
+      "    supportedTypes: [\"${4|char,text,integer,float,monetary,boolean,date,datetime,selection,many2one,one2many,many2many|}\"],",
+      "};",
+      "",
+      "registry.category(\"fields\").add(\"${5:my_widget}\", ${1:myField});"
+    ],
+    "description": "supportedTypes is what the widget= completion reads back"
+  },
+  "owl: hook - useRef": {
+    "scope": "javascript",
+    "prefix": "oref",
+    "body": [
+      "this.${1:canvas}Ref = useRef(\"${1:canvas}\");",
+      "// t-ref=\"${1:canvas}\" in the template. .el is null until mounted.",
+      "$0"
+    ]
+  }
+}
