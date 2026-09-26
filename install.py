@@ -401,6 +401,12 @@ VSCODE_SETTINGS = """{
   "editor.snippetSuggestions": "bottom",
   "editor.quickSuggestions": { "other": true, "comments": false, "strings": true },
 
+  // The interpreter, pinned. Without it the editor picks whichever Python it
+  // finds first, and one without psycopg2 and werkzeug makes Pylance unable to
+  // resolve `from odoo import models` — which is the whole of Python
+  // completion in an Odoo module.
+  "python.defaultInterpreterPath": "%(python_exe)s",
+
   "python.analysis.extraPaths": [%(python_paths)s],
   "python.analysis.packageIndexDepth": 2,
   "python.analysis.autoImportCompletions": false,
@@ -712,6 +718,7 @@ def main():
     write(".vscode/settings.json",
           VSCODE_SETTINGS % {
               "python_paths": '\n    "%s",\n    "."\n  ' % posix(odoo),
+              "python_exe": posix(sys.executable),
               "odools": posix(os.path.join(PROJECT, "odools.toml")),
               "addon_dirs": ", ".join(
                   '"."' if os.path.relpath(a, PROJECT) == "."
