@@ -21,6 +21,11 @@
         "command": "odooXpath.showParent",
         "title": "Odoo: show the inherited view's anchors",
         "category": "Odoo"
+      },
+      {
+        "command": "odooXpath.showLog",
+        "title": "Odoo: show the indexing log",
+        "category": "Odoo"
       }
     ],
     "configuration": {

@@ -64,6 +64,21 @@ RULES = [
      "domain on a field that does not exist fails view validation at "
      "install."),
 
+    # The one that bit us: it does not fail at import, it fails at install
+    # with "Invalid field 'groups_id'", and the traceback blames the XML file
+    # rather than naming the rename.
+    (r"""<field\s+name\s*=\s*["']groups_id["']""",
+     ".xml",
+     "groups_id was renamed group_ids in 19 on ir.actions.*, ir.ui.menu, "
+     "res.users and res.groups. The install fails with 'Invalid field'. The "
+     "groups= shorthand on a menuitem still works and is mapped for you."),
+
+    (r"\bgroups_id\s*=",
+     ".py",
+     "groups_id was renamed group_ids in 19. This is the many2many itself — "
+     "the `groups=` argument on a field definition is a different thing and "
+     "is still correct."),
+
     (r"<tree\b",
      ".xml",
      "<tree> was renamed <list> in 17."),

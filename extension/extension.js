@@ -18,7 +18,11 @@ const cp = require("child_process");
 // project the kit has been dropped into — there is no path to this machine
 // anywhere in it.
 const KIT = "odoo-devkit";
+// Two halves, because they go stale for different reasons: core when the Odoo
+// checkout moves, the project every time a file is saved. Merged here so a
+// save costs the small parse and not the large one.
 const CACHE_REL = path.join(KIT, ".xpath_anchors_cache.json");
+const PROJECT_REL = path.join(KIT, ".xpath_anchors_project.json");
 const WIDGETS_REL = path.join(KIT, ".widget_index.json");
 const WIDGET_SCRIPT_REL = path.join(KIT, "widget_index.py");
 const OWL_REL = path.join(KIT, ".owl_index.json");
@@ -33,9 +37,56 @@ let modelParents = new Map();
 let widgets = new Map();
 let owl = null;
 let building = false;
+// The big cache is not read until something actually asks for a view, a field
+// or an external id. It is 5 MB of JSON, and a window opened to edit Python
+// pays for it today without ever looking at it.
+let cacheLoaded = false;
+let status = null;
+let logChannel = null;
+// Core is kept apart from the merged view so the overlay can be redone without
+// re-reading 5 MB, and without the project's fields leaking into core.
+let core = null;
+let projectStamp = 0;
 
 function log(channel, message) {
   channel.appendLine(`[${new Date().toISOString().slice(11, 19)}] ${message}`);
+}
+
+// Whether the engine is ready is a question that was previously only
+// answerable by reading a notification that had already gone. It is a state,
+// so it lives somewhere permanent: the status bar, clickable straight into the
+// log.
+function setStatus(text, tooltip, busy) {
+  if (!status) return;
+  status.text = busy ? `$(sync~spin) ${text}` : `$(database) ${text}`;
+  status.tooltip = tooltip || text;
+  status.show();
+}
+
+function describeIndex() {
+  if (!cacheLoaded) return "index not read yet";
+  return `${views.size} views, ${modelFields.size} models, ${externalIds.size} ids`;
+}
+
+// Read on demand. Returns false when there is no cache to read, which is the
+// signal to build one.
+function ensureCache() {
+  if (cacheLoaded) {
+    refreshProject();
+    return true;
+  }
+  const file = path.join(root, CACHE_REL);
+  if (!fs.existsSync(file)) return false;
+  const started = Date.now();
+  setStatus("Odoo: reading index…", "Parsing the view and field index", true);
+  const ok = loadCache(logChannel);
+  if (ok) {
+    log(logChannel, `index parsed in ${Date.now() - started} ms`);
+    setStatus(`Odoo: ${describeIndex()}`, "Odoo suggestions ready", false);
+  } else {
+    setStatus("Odoo: no index", "Run Odoo: rebuild index", false);
+  }
+  return ok;
 }
 
 function findRoot() {
@@ -47,23 +98,86 @@ function findRoot() {
   return null;
 }
 
-function loadCache(channel) {
-  const file = path.join(root, CACHE_REL);
-  if (!fs.existsSync(file)) return false;
+function readJson(file) {
+  if (!fs.existsSync(file)) return null;
   try {
-    const data = JSON.parse(fs.readFileSync(file, "utf8"));
-    views = new Map(Object.entries(data.views || {}));
-    externalIds = new Map(Object.entries(data.ids || {}));
-    modelFields = new Map(Object.entries(data.fields || {}));
-    modelParents = new Map(Object.entries(data.inherits || {}));
-    resolved.clear();
-    log(channel,
-      `index loaded: ${views.size} views, ${externalIds.size} ids, ` +
-      `${modelFields.size} models`);
-    return views.size > 0;
+    return JSON.parse(fs.readFileSync(file, "utf8"));
   } catch (err) {
-    log(channel, `index unreadable: ${err.message}`);
+    return { __error: err.message };
+  }
+}
+
+// Project on top of core. Views and ids replace wholesale — a view with our
+// xmlid is ours — but fields merge per model, because a module that adds three
+// fields to res.partner must not hide the other 292.
+function applyOverlay(project) {
+  views = new Map(Object.entries(core.views || {}));
+  externalIds = new Map(Object.entries(core.ids || {}));
+  modelFields = new Map();
+  for (const [model, fields] of Object.entries(core.fields || {})) {
+    modelFields.set(model, Object.assign({}, fields));
+  }
+  modelParents = new Map();
+  for (const [model, parents] of Object.entries(core.inherits || {})) {
+    modelParents.set(model, parents.slice());
+  }
+  if (project) {
+    for (const [id, view] of Object.entries(project.views || {})) {
+      views.set(id, view);
+    }
+    for (const [id, target] of Object.entries(project.ids || {})) {
+      externalIds.set(id, target);
+    }
+    for (const [model, fields] of Object.entries(project.fields || {})) {
+      modelFields.set(model, Object.assign({}, modelFields.get(model) || {}, fields));
+    }
+    for (const [model, parents] of Object.entries(project.inherits || {})) {
+      const merged = modelParents.get(model) || [];
+      for (const parent of parents) {
+        if (!merged.includes(parent)) merged.push(parent);
+      }
+      modelParents.set(model, merged);
+    }
+  }
+  resolved.clear();
+  cacheLoaded = views.size > 0;
+}
+
+function loadCache(channel) {
+  const coreData = readJson(path.join(root, CACHE_REL));
+  if (!coreData) return false;
+  if (coreData.__error) {
+    log(channel, `index unreadable: ${coreData.__error}`);
     return false;
+  }
+  core = coreData;
+  const projectFile = path.join(root, PROJECT_REL);
+  const project = readJson(projectFile);
+  projectStamp = fs.existsSync(projectFile)
+    ? fs.statSync(projectFile).mtimeMs
+    : 0;
+  applyOverlay(project && !project.__error ? project : null);
+  log(channel,
+    `index loaded: ${views.size} views, ${externalIds.size} ids, ` +
+    `${modelFields.size} models`);
+  return views.size > 0;
+}
+
+// Cheap enough to check on every completion: the project half is a couple of
+// hundred kilobytes, and re-reading it is how a field added a minute ago turns
+// up in the list without a reload.
+function refreshProject() {
+  if (!core) return;
+  const file = path.join(root, PROJECT_REL);
+  if (!fs.existsSync(file)) return;
+  const stamp = fs.statSync(file).mtimeMs;
+  if (stamp === projectStamp) return;
+  const project = readJson(file);
+  if (!project || project.__error) return;
+  projectStamp = stamp;
+  applyOverlay(project);
+  if (logChannel) {
+    log(logChannel, `project index re-read: ${views.size} views`);
   }
 }
 
@@ -187,6 +301,7 @@ function build(channel, rebuild) {
           (err, _stdout, stderr) => {
             building = false;
             if (err) {
+              setStatus("Odoo: index failed", "See the Odoo xpath output", false);
               log(channel, `index failed: ${stderr || err.message}`);
               vscode.window.showErrorMessage(
                 "Odoo xpath: could not build the index. See the Odoo xpath output."
@@ -194,7 +309,13 @@ function build(channel, rebuild) {
               resolve(false);
               return;
             }
-            resolve(loadCache(channel));
+            const ok = loadCache(channel);
+            setStatus(
+              ok ? `Odoo: ${describeIndex()}` : "Odoo: no index",
+              ok ? "Odoo suggestions ready" : "Run Odoo: rebuild index",
+              false
+            );
+            resolve(ok);
           }
         );
       })
@@ -451,9 +572,9 @@ function withoutComments(text) {
 }
 
 function diagnoseView(document) {
-  if (!modelFields.size) return [];
   const p = document.uri.fsPath.replace(/\\/g, "/");
   if (!p.endsWith(".xml") || /\/static\//.test(p)) return [];
+  if (!ensureCache() || !modelFields.size) return [];
 
   const text = withoutComments(document.getText());
   const out = [];
@@ -951,6 +1072,7 @@ const POSITIONS = [
 function activate(context) {
   const channel = vscode.window.createOutputChannel("Odoo xpath");
   context.subscriptions.push(channel);
+  logChannel = channel;
 
   root = findRoot();
   if (!root) {
@@ -958,9 +1080,25 @@ function activate(context) {
     return;
   }
   log(channel, `root: ${root}`);
-  if (!loadCache(channel)) build(channel, false);
+
+  status = vscode.window.createStatusBarItem(
+    vscode.StatusBarAlignment.Right,
+    50
+  );
+  status.command = "odooXpath.showLog";
+  context.subscriptions.push(status);
+
+  // The two small indexes are read now: 28 KB and 86 KB, and the OWL one is
+  // needed by the diagnostics that run on every open document anyway. The big
+  // one waits for somebody to ask.
   if (!loadWidgets(channel)) buildWidgets(channel);
   if (!loadOwl(channel)) buildOwl(channel);
+  if (!fs.existsSync(path.join(root, CACHE_REL))) {
+    setStatus("Odoo: building index…", "First run: reading the Odoo tree", true);
+    build(channel, false);
+  } else {
+    setStatus("Odoo: index ready", "Read on first use — click for the log", false);
+  }
 
   // Diagnostics for OWL templates: OWL's own compile-time rules, reported
   // while typing instead of in the browser console after a rebuild.
@@ -989,6 +1127,9 @@ function activate(context) {
     { language: "xml", scheme: "file" },
     {
       provideCompletionItems(document, position) {
+        // The first completion in a window pays for the index; every one
+        // after it is a Map lookup.
+        ensureCache();
         const before = document.getText(
           new vscode.Range(new vscode.Position(0, 0), position)
         );
@@ -1117,7 +1258,7 @@ function activate(context) {
           log(channel, "cursor is in an xpath with no inherit_id above it");
           return;
         }
-        if (!views.size) {
+        if (!ensureCache() || !views.size) {
           build(channel, false);
           return;
         }
@@ -1183,6 +1324,9 @@ function activate(context) {
   context.subscriptions.push(csvProvider);
 
   context.subscriptions.push(
+    vscode.commands.registerCommand("odooXpath.showLog", () => {
+      channel.show(true);
+    }),
     vscode.commands.registerCommand("odooXpath.rebuild", async () => {
       const ok = await build(channel, true);
       await buildWidgets(channel);
@@ -1199,6 +1343,7 @@ function activate(context) {
     vscode.commands.registerCommand("odooXpath.showParent", async () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor) return;
+      ensureCache();
       const ref = inheritedRef(
         editor.document.getText(),
         editor.document.offsetAt(editor.selection.active)

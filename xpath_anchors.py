@@ -13,12 +13,12 @@ This reads the parent view and prints every anchor it really has, ready to
 paste. It searches this repo and the local Odoo source, so it answers for core
 views too.
 
-    python odoo-devkit/xpath_anchors.py base.view_partner_form
-    python odoo-devkit/xpath_anchors.py my_module.view_thing_form --tree
+    python tools/xpath_anchors.py base.view_partner_form
+    python tools/xpath_anchors.py village_base.view_unit_form --tree
 
 Given a file instead of an id, it answers for every inherit_id in that file:
 
-    python odoo-devkit/xpath_anchors.py my_module/views/thing_views.xml
+    python tools/xpath_anchors.py village_charges/views/village_views.xml
 
 It reads the parent's OWN arch. Other modules' additions to the same view are
 listed at the end, because a node added by another module is a legal anchor
@@ -57,10 +57,10 @@ def odoo_paths():
 
 # The local Odoo source has an `ent_addons` directory inside it holding the
 # Enterprise modules — helpdesk, industry_fsm, documents — and a second copy
-# of base. Skipped by default, and for more than tidiness: a tool that
-# cheerfully offers an anchor from an Enterprise view helps you write a
-# module that installs on your machine and is missing on a Community
-# server. --enterprise includes them, marked.
+# of base. Skipped by default, and for more than tidiness: the village line is
+# Community only (RULE #10c), and a tool that cheerfully offers an anchor from
+# an Enterprise view is a tool that helps you write a module which installs
+# here and fails on the customer's server. --enterprise includes them, marked.
 ENTERPRISE_DIRS = {"ent_addons", "enterprise", "odoo-enterprise"}
 
 
@@ -105,7 +105,7 @@ def class_bodies(text):
 
 
 def index_models(roots, ids, skip, model_fields=None, model_parents=None):
-    """The ir.model ids Odoo generates: sale.order -> model_sale_order.
+    """The ir.model ids Odoo generates: village.unit -> model_village_unit.
 
     They exist only in the database, so there is nothing to copy them from
     and they are retyped from memory into every ACL line.
@@ -291,8 +291,72 @@ def index_views(roots, with_enterprise=False, ids=None):
     return views
 
 
-CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                     ".xpath_anchors_cache.json")
+_HERE = os.path.dirname(os.path.abspath(__file__))
+# Two files, because they go stale for completely different reasons. Core moves
+# when the Odoo checkout moves, which is roughly never; the project moves every
+# time you save. Keeping them together meant the second invalidated the first.
+CACHE = os.path.join(_HERE, ".xpath_anchors_cache.json")        # merged, core
+PROJECT_CACHE = os.path.join(_HERE, ".xpath_anchors_project.json")
+
+
+def core_stamp(roots):
+    """What would make the core index wrong: a different or moved Odoo tree.
+
+    The path list and the mtime of each root's own directory entry. Walking
+    core to check it would cost what the rebuild costs, which is the thing
+    being avoided.
+    """
+    stamp = []
+    for root in roots:
+        if is_project(root):
+            continue
+        try:
+            stamp.append([root, os.path.getmtime(root)])
+        except OSError:
+            stamp.append([root, 0.0])
+    return stamp
+
+
+def is_project(path):
+    """Is this root our own source rather than Odoo's?"""
+    return os.path.abspath(path).startswith(os.path.abspath(REPO))
+
+
+def split_roots(roots):
+    project = [r for r in roots if is_project(r)]
+    core = [r for r in roots if not is_project(r)]
+    return project, core
+
+
+def merge(core, project):
+    """Project on top of core. A same-named view in ours is ours."""
+    data = {
+        "built": project.get("built", core.get("built")),
+        "repo_mtime": project.get("repo_mtime", 0),
+        "enterprise": core.get("enterprise", False),
+        "views": dict(core.get("views") or {}),
+        "ids": dict(core.get("ids") or {}),
+        # The inner dicts are copied, not shared. A shallow dict() hands back
+        # core's own dict for res.partner, and updating it through setdefault
+        # edits the core cache in memory — so a second merge starts from a
+        # core that already has our fields in it.
+        "fields": {model: dict(fields)
+                   for model, fields in (core.get("fields") or {}).items()},
+        "inherits": {model: list(parents)
+                     for model, parents in (core.get("inherits") or {}).items()},
+    }
+    data["views"].update(project.get("views") or {})
+    data["ids"].update(project.get("ids") or {})
+    # Fields and inherits merge per model, not per key: our module adds three
+    # fields to res.partner and must not replace the other 287.
+    for model, fields in (project.get("fields") or {}).items():
+        data["fields"].setdefault(model, {}).update(fields)
+    for model, parents in (project.get("inherits") or {}).items():
+        merged = data["inherits"].setdefault(model, [])
+        for parent in parents:
+            if parent not in merged:
+                merged.append(parent)
+    return data
 
 
 def repo_mtime():
@@ -310,8 +374,13 @@ def repo_mtime():
     return newest
 
 
-def build_cache(roots, with_enterprise=False):
-    """Index once (about three seconds) so every later lookup is instant."""
+def build_cache(roots, with_enterprise=False, target=None):
+    """Index one side of the split.
+
+    `target` is the file to write and decides what goes in it, so the two
+    caches are built by the same code rather than by two that drift apart.
+    """
+    target = target or CACHE
     ids = {}
     views = index_views(roots, with_enterprise, ids)
     skip = {"node_modules", "__pycache__", ".git", "tests", "static"}
@@ -320,7 +389,8 @@ def build_cache(roots, with_enterprise=False):
     model_fields, model_parents = {}, {}
     index_models(roots, ids, skip, model_fields, model_parents)
     data = {"built": time.time(), "repo_mtime": repo_mtime(),
-            "enterprise": with_enterprise, "views": {}, "ids": ids,
+            "enterprise": with_enterprise, "core_stamp": core_stamp(roots),
+            "views": {}, "ids": ids,
             "fields": model_fields, "inherits": model_parents}
     for xmlid, view in views.items():
         data["views"][xmlid] = {
@@ -331,22 +401,43 @@ def build_cache(roots, with_enterprise=False):
             "anchors": ([list(a) for a in anchors(view["arch"])]
                         if view["arch"] is not None else []),
         }
-    with io.open(CACHE, "w", encoding="utf-8") as fh:
+    with io.open(target, "w", encoding="utf-8") as fh:
         json.dump(data, fh)
     return data
 
 
+def _read(path):
+    if not os.path.exists(path):
+        return None
+    try:
+        return json.load(io.open(path, encoding="utf-8"))
+    except ValueError:
+        return None
+
+
 def load_cache(roots, with_enterprise=False, rebuild=False):
-    if not rebuild and os.path.exists(CACHE):
-        try:
-            data = json.load(io.open(CACHE, encoding="utf-8"))
-        except ValueError:
-            data = None
-        # Core does not change; our own files do, so only those are checked.
-        if data and data.get("enterprise") == with_enterprise \
-                and data.get("repo_mtime", 0) >= repo_mtime():
-            return data
-    return build_cache(roots, with_enterprise)
+    """Core from cache, the project re-indexed when it has moved.
+
+    This is the whole point of the split: editing a view costs a walk of our
+    own source — a few dozen files — and not of the twelve thousand in Odoo.
+    """
+    project_roots, core_roots = split_roots(roots)
+
+    core = None if rebuild else _read(CACHE)
+    if core is not None and (
+            core.get("enterprise") != with_enterprise
+            or core.get("core_stamp") != core_stamp(roots)):
+        core = None
+    if core is None:
+        core = build_cache(core_roots, with_enterprise, CACHE)
+
+    project = None if rebuild else _read(PROJECT_CACHE)
+    if project is not None and project.get("repo_mtime", 0) < repo_mtime():
+        project = None
+    if project is None:
+        project = build_cache(project_roots, with_enterprise, PROJECT_CACHE)
+
+    return merge(core, project)
 
 
 def anchors(arch):
@@ -417,8 +508,8 @@ def report(xmlid, views, show_tree):
           if view["path"].startswith(REPO) else "  " + view["path"])
 
     if view.get("enterprise"):
-        print("  *** ENTERPRISE. Inheriting this from a Community module")
-        print("      works here and is missing on the customer's server.")
+        print("  *** ENTERPRISE. Nothing in the village line may inherit this:")
+        print("      it installs here and is missing on the customer's server.")
 
     if view["inherit"]:
         print("  NOTE: this view is itself an extension of %s — anchor on the"
@@ -459,8 +550,8 @@ def main():
     parser.add_argument("--rebuild", action="store_true",
                         help="throw the cache away and index again")
     parser.add_argument("--enterprise", action="store_true",
-                        help="also search the Enterprise source (wrong for a "
-                             "Community-only project)")
+                        help="also search the Enterprise source (village is "
+                             "Community only, so this is normally wrong)")
     args = parser.parse_args()
 
     roots = [REPO] + odoo_paths()
